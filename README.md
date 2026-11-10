@@ -84,20 +84,20 @@ The frontend uses `http://127.0.0.1:8000` by default. To change it, copy
 `frontend/.env.example` to `frontend/.env.local`, set `VITE_API_BASE_URL`, and
 restart Vite.
 
-## 4. Deploy the website
+## 4. Deploy the chatbot
 
-The Vercel configuration builds the Vite app in `frontend/` and rewrites
-client-side routes such as `/assistant` to the app entry point. It supports
-Vercel projects whose root directory is either the repository root or
-`frontend/`. Pushes to `main` trigger a new deployment when the Vercel project
-is connected to this GitHub repository.
+The Vercel website calls `/api` in production. Deploy the API as a separate
+Vercel project from this same GitHub repository, with the project root set to
+`backend/`. Vercel detects the FastAPI application in `main.py`; `backend/vercel.json`
+includes the college documents and allows up to 60 seconds for web search.
+After the API deployment is ready, add a rewrite from `/api/(.*)` on the
+frontend project to the API deployment's domain, then redeploy the frontend.
 
-The FastAPI backend is a separate service; deploying the frontend to Vercel
-does not deploy the API. To enable chat in production, deploy `backend/` to a
-Python API host, configure its allowed `FRONTEND_ORIGINS` to include the Vercel
-site URL, and set `VITE_API_BASE_URL` in the Vercel project to that backend's
-public URL. Add `GEMINI_API_KEY` and any optional `BRAVE_SEARCH_API_KEY` only
-to the backend service's environment, never to Vercel's frontend build.
+The API uses the in-memory document collection on Vercel because serverless
+filesystems are not persistent. Keep `GEMINI_API_KEY` and optional
+`BRAVE_SEARCH_API_KEY` in the API project's environment variables only; without
+a Gemini key, the API still returns labeled extracts from verified local and
+web sources.
 
 ## What the main files do
 

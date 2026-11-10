@@ -18,16 +18,23 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-try:
-    import chromadb
-    from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-except Exception as error:  # ChromaDB's optional native dependencies may be blocked by Windows policy.
+if os.getenv("VERCEL"):
     chromadb = None
     DefaultEmbeddingFunction = None
     logging.getLogger("student_friendly_bot").warning(
-        "ChromaDB could not be imported (%s); the API will use an in-memory document collection.",
-        error,
+        "Using an in-memory document collection on Vercel."
     )
+else:
+    try:
+        import chromadb
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+    except Exception as error:  # ChromaDB's optional native dependencies may be blocked by Windows policy.
+        chromadb = None
+        DefaultEmbeddingFunction = None
+        logging.getLogger("student_friendly_bot").warning(
+            "ChromaDB could not be imported (%s); the API will use an in-memory document collection.",
+            error,
+        )
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -37,8 +44,8 @@ from google.genai import types
 from pydantic import BaseModel, Field
 from pypdf import PdfReader
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-BACKEND_DIR = BASE_DIR / "backend"
+BACKEND_DIR = Path(__file__).resolve().parent
+BASE_DIR = BACKEND_DIR.parent
 DOCUMENTS_DIR = BACKEND_DIR / "documents"
 CHROMA_DIR = BACKEND_DIR / ".chromadb"
 UNAVAILABLE_ANSWER = (
@@ -946,7 +953,8 @@ allowed_origins = [
     origin.strip()
     for origin in os.getenv(
         "FRONTEND_ORIGINS",
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,"
+        "http://127.0.0.1:3000,https://collageeventandclubinformationbot.vercel.app",
     ).split(",")
     if origin.strip()
 ]

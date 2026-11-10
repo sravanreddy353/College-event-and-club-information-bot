@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "main.py": {
+      "includeFiles": "documents/**",
+      "maxDuration": 60
+    }
+  }
+}
