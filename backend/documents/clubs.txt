@@ -1,0 +1,144 @@
+COLLEGE EVENT AND CLUB INFORMATION BOT
+Document: Official College Clubs
+Institution: Kalasalingam Academy of Research and Education (KARE)
+Location: Anand Nagar, Krishnankoil, Tamil Nadu – 626126
+Last checked: 10 November 2026
+
+DATA SOURCE:
+Official university website:
+https://www.kalasalingam.ac.in/clubs/
+
+IMPORTANT:
+This document uses publicly available university information. Unpublished schedules, joining procedures and contact details are marked as requiring confirmation. Do not generate invented information.
+
+CLUB 1
+Name: Green Army Club
+Focus: Environmental awareness and environmental activities.
+Activities: Environmental initiatives, tree adoption, vehicle-free day and emission-free day programmes.
+Official contact: greenarmy@klu.ac.in
+Meeting schedule: Not confirmed.
+How to join: Contact the university's Student Affairs office for the current joining procedure.
+
+CLUB 2
+Name: Nature Club
+Focus: Nature conservation, wildlife awareness and environmental protection.
+Activities: Awareness programmes, wildlife photography, animal rescue, research, environmental rallies and educational events.
+Groups:
+- Awareness Group
+- Photographic Group
+- Rescue Group
+- Research Group
+Meeting schedule: Not confirmed.
+How to join: Contact the university's Student Affairs office.
+
+CLUB 3
+Name: Fine Arts Club – Pyros
+Focus: Music, dance, theatre and cultural activities.
+Activities: Cultural performances, music and dance competitions, workshops and events such as MIRTH.
+Meeting schedule: Not confirmed.
+How to join: Contact the Fine Arts Club coordinator or Student Affairs office.
+
+CLUB 4
+Name: Tamil Mandram
+Focus: Tamil language, literature and cultural heritage.
+Activities: Literary events, guest lectures, creative writing competitions, cultural programmes and Tamil-related activities.
+Meeting schedule: Not confirmed.
+How to join: Contact the Tamil Mandram coordinator or Student Affairs office.
+
+CLUB 5
+Name: Sherlock Holmes Club
+Focus: Analytical thinking, reasoning and problem-solving activities.
+Activities: Quizzes, accuracy games, detective-themed activities and awareness programmes.
+Meeting schedule: Not confirmed.
+How to join: Contact the club coordinator or Student Affairs office.
+
+CLUB 6
+Name: Vishaka Club
+Focus: Cultural activities and student talent development.
+Activities: Open-stage programmes, music, dance and cultural celebrations.
+Meeting schedule: Not confirmed.
+How to join: Contact the club coordinator or Student Affairs office.
+
+CLUB 7
+Name: Photography Club
+Focus: Photography and creative visual expression.
+Activities: Photography-related student activities.
+Meeting schedule: Not confirmed.
+How to join: Contact the Student Affairs office.
+
+CLUB 8
+Name: Youth Red Cross Club
+Focus: Social service and humanitarian activities.
+Activities: Student volunteering and community-oriented activities.
+Meeting schedule: Not confirmed.
+How to join: Contact the Student Affairs office.
+
+CLUB 9
+Name: Yuva Tourism Club
+Focus: Tourism-related student activities.
+Activities: Not confirmed in the available source.
+Meeting schedule: Not confirmed.
+How to join: Contact the Student Affairs office.
+
+CLUB 10
+Name: National Service Scheme (NSS)
+Focus: Community service and social responsibility.
+Activities: Community outreach and social service programmes.
+Meeting schedule: Not confirmed.
+How to join: Contact the NSS coordinator.
+
+CLUB 11
+Name: National Cadet Corps (NCC)
+Focus: Cadet training, discipline and service.
+Activities: NCC-related training and activities.
+Meeting schedule: Not confirmed.
+How to join: Contact the NCC coordinator.
+
+GENERAL STUDENT SUPPORT:
+Office: Office of Student Affairs
+Purpose: Supports non-academic clubs, cultural activities, sports and student development.
+
+Official website:
+https://www.kalasalingam.ac.in/campus-life/
+
+University contact:
+Email: info@kalasalingam.ac.in
+Phone: 04563 289042
+
+EVENT 1
+Name: Vehicle & Emission Free Day
+Date: 28 September 2024
+Organizer: Green Army Club
+Time: 10:00 AM-1:00 PM
+The page reports that 45 Green Army members participated in an awareness event
+about vehicle pollution.
+
+EVENT 2
+Name: BLITZ 2024
+Date: 28 September 2024
+Organizer: Green Army Club
+Venue: Dr. K.S. Krishnan Auditorium
+The page reports over 120 participating SHIP students and describes nature-
+themed competitions and student talent activities.
+
+EVENT 3
+Name: Eco Odyssey
+Dates: 9-10 November 2024
+Organizer: Nature Club
+The page documents a Nature Club trip through Kochi.
+
+Source for all activities above:
+https://www.kalasalingam.ac.in/clubs/
+
+RAG TEST QUESTIONS:
+1. Which clubs are available at Kalasalingam University?
+2. What activities does the Nature Club conduct?
+3. What is the main purpose of Green Army?
+4. What is the Fine Arts Club called?
+5. What activities does Tamil Mandram organize?
+6. What does the Sherlock Holmes Club focus on?
+7. How can I find the current club joining procedure?
+8. Which office supports non-academic clubs?
+
+DATA ACCURACY:
+Do not invent club meeting schedules, joining deadlines, registration links or coordinator contact details. If information is unavailable, tell the student to contact the Student Affairs office.

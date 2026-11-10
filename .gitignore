@@ -1,0 +1,8 @@
+backend/.env
+backend/.chromadb/
+backend/__pycache__/
+backend/.venv/
+__pycache__/
+*.py[cod]
+frontend/.env.local
+frontend/.env

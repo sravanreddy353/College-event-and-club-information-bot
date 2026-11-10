@@ -1,0 +1,38 @@
+KALASALINGAM ACADEMY OF RESEARCH AND EDUCATION (KARE)
+Document: Officially documented workshop information
+Last checked: 10 November 2026
+
+IMPORTANT:
+The dated entries below are historical workshops listed in KARE's official
+2023-2024 events archive. They are not upcoming workshops. Do not infer current
+dates, registration status, speakers, or venues from these past entries.
+
+WORKSHOP 1
+Name: Workshop on AVGC
+Date: 12 May 2023
+Source: KARE official events archive
+https://www.kalasalingam.ac.in/2023-events/
+
+WORKSHOP 2
+Name: Data Science and Visualization using Python
+Dates: 3-4 July 2023
+Source: KARE official events archive
+https://www.kalasalingam.ac.in/2023-events/
+
+PROGRAM INFORMATION: ACM INDIA ROCS
+KARE's official ROCS page describes the ACM India Research Opportunities in
+Computer Science initiative as an opportunity for undergraduate students to
+learn about computer science research. The page describes expert talks, an
+"Ask-me-Anything" session, and interaction/networking opportunities.
+The page checked does not confirm a current or upcoming ROCS date, venue, or
+registration period.
+Source: KARE official ROCS page
+https://www.kalasalingam.ac.in/rocs/
+
+ANSWERING RULES:
+1. Identify dated workshops as historical.
+2. Do not claim the ROCS program overview is a future event announcement.
+3. Do not invent missing details such as speakers, times, venues, fees, or
+   registration links.
+4. For current announcements, refer students to KARE's official website:
+   https://www.kalasalingam.ac.in/
