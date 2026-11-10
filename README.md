@@ -84,6 +84,21 @@ The frontend uses `http://127.0.0.1:8000` by default. To change it, copy
 `frontend/.env.example` to `frontend/.env.local`, set `VITE_API_BASE_URL`, and
 restart Vite.
 
+## 4. Deploy the website
+
+The Vercel configuration builds the Vite app in `frontend/` and rewrites
+client-side routes such as `/assistant` to the app entry point. It supports
+Vercel projects whose root directory is either the repository root or
+`frontend/`. Pushes to `main` trigger a new deployment when the Vercel project
+is connected to this GitHub repository.
+
+The FastAPI backend is a separate service; deploying the frontend to Vercel
+does not deploy the API. To enable chat in production, deploy `backend/` to a
+Python API host, configure its allowed `FRONTEND_ORIGINS` to include the Vercel
+site URL, and set `VITE_API_BASE_URL` in the Vercel project to that backend's
+public URL. Add `GEMINI_API_KEY` and any optional `BRAVE_SEARCH_API_KEY` only
+to the backend service's environment, never to Vercel's frontend build.
+
 ## What the main files do
 
 - `frontend/src/components/ChatAssistant.jsx`: chat dialog, suggestions,
