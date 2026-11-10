@@ -86,12 +86,12 @@ restart Vite.
 
 ## 4. Deploy the chatbot
 
-The Vercel website calls `/api` in production. Deploy the API as a separate
-Vercel project from this same GitHub repository, with the project root set to
-`backend/`. Vercel detects the FastAPI application in `main.py`; `backend/vercel.json`
-includes the college documents and allows up to 60 seconds for web search.
-After the API deployment is ready, add a rewrite from `/api/(.*)` on the
-frontend project to the API deployment's domain, then redeploy the frontend.
+The Vercel website sends production `/api/*` requests through a rewrite to the
+backend at `https://kare-student-information-api.vercel.app`. Deploy the API as
+a separate Vercel project from this same GitHub repository, with the project
+name `kare-student-information-api` and root directory `backend/`. Vercel
+detects the FastAPI application in `main.py`; `backend/vercel.json` includes
+the college documents and allows up to 60 seconds for web search.
 
 The API uses the in-memory document collection on Vercel because serverless
 filesystems are not persistent. Keep `GEMINI_API_KEY` and optional
