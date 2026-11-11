@@ -17,6 +17,10 @@ they can be searched. The five current event, club, workshop, seminar, and
 competition TXT files are explicitly labeled fictional demo data, not real
 college announcements. Replace them with verified records when ready.
 
+The official reference links included in the college documentation are
+[Kalasalingam Academy of Research and Education](https://www.kalasalingam.ac.in/)
+and its [clubs and student activities page](https://www.kalasalingam.ac.in/clubs/).
+
 The backend checks this folder when it starts. To process additions, changes, or
 removals while it is running, call `POST /ingest`. Unchanged documents are
 skipped; only new or changed chunks are embedded. Numbered activity records are
@@ -47,7 +51,7 @@ pages may still contribute indexed snippets. Search engine access/rate limits
 vary by network. Keep all keys in the backend only; do not put them in React or
 commit the `.env` file.
 
-Start the API:
+For direct API development, start the API:
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
@@ -56,6 +60,29 @@ Start the API:
 Check `http://127.0.0.1:8000/health` for API status, whether Gemini is
 configured, and how many document chunks are indexed.
 
+## 3. User accounts and chat history
+
+The API creates a SQLite database at `backend/student_assistant.sqlite3` on
+first start. It stores account records, PBKDF2-SHA256 password hashes, hashed
+server-side session tokens, conversations, and timestamped messages. The
+database file is local and should be backed up. To put it elsewhere, set
+`DATABASE_PATH` to a writable persistent file path in `backend/.env`.
+
+Students can create accounts at `/register` and sign in at `/login`. The
+assistant and its chat, history, and ingestion APIs require a valid session.
+Sessions use an HTTP-only cookie and expire after 30 days; set
+`COOKIE_SECURE=true` when serving over HTTPS (it is enabled automatically on
+Vercel). Chats are scoped to their authenticated owner. Email verification,
+Google sign-in, and email-based password reset are not configured; the reset
+screen directs users to their campus administrator.
+
+SQLite is suitable for local development and a single server with a persistent
+disk. Vercel uses a temporary `/tmp` SQLite file only so the API can start; its
+contents can disappear between serverless instances or restarts. This project
+currently has no hosted-database adapter, so its SQLite setup is not suitable
+for production accounts on Vercel. Add and configure a shared persistent
+database adapter before deploying there.
+
 After adding or updating files while the API is running, process the folder with
 this PowerShell command:
 
@@ -63,14 +90,15 @@ this PowerShell command:
 Invoke-RestMethod -Method Post http://127.0.0.1:8000/ingest | ConvertTo-Json -Depth 4
 ```
 
-The response reports processed and unchanged files, chunk changes, and any
-document extraction failures. `/chat` searches the web and local index for each
-question, returns clickable source URLs, and explains when the requested
-information could not be verified.
+The ingestion endpoint now requires an authenticated session. The response
+reports processed and unchanged files, chunk changes, and any document
+extraction failures. `/chat` searches the web and local index for each question,
+returns clickable source URLs, and explains when the requested information
+could not be verified.
 
-## 3. Run the website
+## 4. Run the website
 
-In a second PowerShell window, from the project root:
+From the project root, start the API and frontend together:
 
 ```powershell
 cd frontend
@@ -78,20 +106,21 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite (normally `http://localhost:5173`). The
-homepage's **Chat with Student Friendly Bot** button opens the live chat window.
-The frontend uses `http://127.0.0.1:8000` by default. To change it, copy
-`frontend/.env.example` to `frontend/.env.local`, set `VITE_API_BASE_URL`, and
-restart Vite.
+The development command waits for the API to be ready before starting Vite and
+stops both services when you press Ctrl+C. Open the local URL printed by Vite
+(normally `http://127.0.0.1:5173`). The frontend sends API requests through
+Vite's same-origin `/api` proxy, so browser cookies work without cross-origin
+configuration. If the Python virtual environment is not at `backend/.venv`, set
+the `PYTHON` environment variable to its Python executable before `npm run dev`.
 
-## 4. Deploy the chatbot
+## 5. Deploy the chatbot
 
-The Vercel website sends production `/api/*` requests through a rewrite to the
-backend at `https://kare-student-information-api.vercel.app`. Deploy the API as
-a separate Vercel project from this same GitHub repository, with the project
-name `kare-student-information-api` and root directory `backend/`. Vercel
-detects the FastAPI application in `main.py`; `backend/vercel.json` includes
-the college documents and allows up to 60 seconds for web search.
+The Vercel website calls `/api` in production. Deploy the API as a separate
+Vercel project from this same GitHub repository, with the project root set to
+`backend/`. Vercel detects the FastAPI application in `main.py`; `backend/vercel.json`
+includes the college documents and allows up to 60 seconds for web search.
+After the API deployment is ready, add a rewrite from `/api/(.*)` on the
+frontend project to the API deployment's domain, then redeploy the frontend.
 
 The API uses the in-memory document collection on Vercel because serverless
 filesystems are not persistent. Keep `GEMINI_API_KEY` and optional
@@ -101,8 +130,10 @@ web sources.
 
 ## What the main files do
 
-- `frontend/src/components/ChatAssistant.jsx`: chat dialog, suggestions,
-  conversation history, loading state, and requests to the backend.
+- `frontend/src/auth/AuthContext.jsx` and `frontend/src/pages/AuthPage.jsx`:
+  signed-in user state and account sign-in/registration.
+- `frontend/src/components/ChatWorkspace.jsx`: authenticated assistant,
+  per-user conversation sidebar, message history, and logout.
 - `frontend/src/pages/HomePage.jsx`: opens the chat from the existing homepage
   button.
 - `frontend/src/pages/WorkshopsPage.jsx` and

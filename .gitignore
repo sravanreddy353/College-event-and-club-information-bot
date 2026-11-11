@@ -1,5 +1,6 @@
 backend/.env
 backend/.chromadb/
+backend/student_assistant.sqlite3*
 backend/__pycache__/
 backend/.venv/
 __pycache__/

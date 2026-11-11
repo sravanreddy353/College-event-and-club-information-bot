@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import main
+from fastapi.testclient import TestClient
 
 
 class FakeCollection:
@@ -406,6 +407,140 @@ class ChatTests(unittest.TestCase):
             ],
         )
         self.assertTrue(all(result.content == "Official and indexed page content." for result in results))
+
+
+class AuthenticationAndHistoryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.original_database_path = main.DATABASE_PATH
+        main.DATABASE_PATH = Path(self.temp_dir.name) / "assistant.sqlite3"
+        main.initialize_database()
+
+    def tearDown(self):
+        main.DATABASE_PATH = self.original_database_path
+        self.temp_dir.cleanup()
+
+    def register_user(self, email="student@example.edu", name="Student"):
+        response = main.Response()
+        user = main.register(
+            main.RegisterRequest(name=name, email=email, password="secure-pass-123"),
+            response,
+        )
+        return user, response
+
+    def test_registration_hashes_password_and_rejects_duplicate_email(self):
+        user, response = self.register_user(email="Student@Example.edu")
+        self.assertEqual(user.email, "student@example.edu")
+        self.assertIn("httponly", response.headers["set-cookie"].lower())
+
+        with main.database_connection() as connection:
+            row = connection.execute(
+                "SELECT password_hash FROM users WHERE id = ?", (user.id,)
+            ).fetchone()
+        self.assertNotEqual(row["password_hash"], "secure-pass-123")
+        self.assertTrue(main.verify_password("secure-pass-123", row["password_hash"]))
+
+        with self.assertRaises(main.HTTPException) as duplicate:
+            self.register_user(email="student@example.edu")
+        self.assertEqual(duplicate.exception.status_code, 409)
+
+    def test_login_and_logout_manage_server_side_sessions(self):
+        user, _ = self.register_user()
+        login_response = main.Response()
+        logged_in = main.login(
+            main.LoginRequest(email="STUDENT@example.edu", password="secure-pass-123"),
+            login_response,
+        )
+        self.assertEqual(logged_in.id, user.id)
+        token = login_response.headers["set-cookie"].split(";", maxsplit=1)[0].split("=", maxsplit=1)[1]
+        self.assertEqual(main.require_user(token)["id"], user.id)
+
+        bad_login = main.LoginRequest(email="student@example.edu", password="incorrect")
+        with self.assertRaises(main.HTTPException) as unauthorized:
+            main.login(bad_login, main.Response())
+        self.assertEqual(unauthorized.exception.status_code, 401)
+
+        logout_response = main.Response()
+        main.logout(logout_response, token)
+        with self.assertRaises(main.HTTPException) as expired:
+            main.require_user(token)
+        self.assertEqual(expired.exception.status_code, 401)
+
+    def test_chat_history_is_private_persistent_and_deletable(self):
+        first_user, _ = self.register_user(email="first@example.edu", name="First")
+        second_user, _ = self.register_user(email="second@example.edu", name="Second")
+        answers = []
+
+        def fake_answer(request):
+            answers.append(request)
+            return main.ChatResponse(
+                answer=f"Answer {len(answers)}",
+                sources=[main.SourceReference(title="Campus source")],
+            )
+
+        with patch.object(main, "chat", side_effect=fake_answer):
+            first_response = main.authenticated_chat(
+                main.ChatRequest(message="When is the campus event?"), first_user.model_dump()
+            )
+            second_response = main.authenticated_chat(
+                main.ChatRequest(message="What is the venue?", chat_id=first_response.chat_id),
+                first_user.model_dump(),
+            )
+
+        self.assertEqual(first_response.chat_id, second_response.chat_id)
+        self.assertEqual(answers[1].history[0].content, "When is the campus event?")
+        self.assertEqual(answers[1].history[1].content, "Answer 1")
+        listing = main.list_chats(first_user.model_dump())
+        self.assertEqual(len(listing), 1)
+        self.assertEqual(listing[0]["title"], "When is the campus event?")
+        self.assertEqual(main.list_chats(second_user.model_dump()), [])
+
+        conversation = main.get_chat(first_response.chat_id, first_user.model_dump())
+        self.assertEqual(len(conversation["messages"]), 4)
+        self.assertEqual(conversation["messages"][1]["sources"][0]["title"], "Campus source")
+        with self.assertRaises(main.HTTPException) as private:
+            main.get_chat(first_response.chat_id, second_user.model_dump())
+        self.assertEqual(private.exception.status_code, 404)
+        with self.assertRaises(main.HTTPException) as private_delete:
+            main.delete_chat(first_response.chat_id, second_user.model_dump())
+        self.assertEqual(private_delete.exception.status_code, 404)
+
+        main.delete_chat(first_response.chat_id, first_user.model_dump())
+        self.assertEqual(main.list_chats(first_user.model_dump()), [])
+
+    def test_authenticated_api_registration_chat_and_logout(self):
+        with TestClient(main.app) as client:
+            self.assertEqual(client.get("/chats").status_code, 401)
+            registration = client.post(
+                "/auth/register",
+                json={
+                    "name": "API Student",
+                    "email": "api-student@example.edu",
+                    "password": "secure-pass-123",
+                },
+            )
+            self.assertEqual(registration.status_code, 201)
+            self.assertIn("httponly", registration.headers["set-cookie"].lower())
+
+            with patch.object(
+                main,
+                "chat",
+                return_value=main.ChatResponse(answer="Here is the answer.", sources=[]),
+            ):
+                sent = client.post("/chat", json={"message": "Where is the event?"})
+            self.assertEqual(sent.status_code, 200)
+            chat_id = sent.json()["chat_id"]
+
+            history = client.get("/chats")
+            self.assertEqual(len(history.json()), 1)
+            detail = client.get(f"/chats/{chat_id}")
+            self.assertEqual(
+                [message["role"] for message in detail.json()["messages"]],
+                ["user", "assistant"],
+            )
+            self.assertEqual(client.delete(f"/chats/{chat_id}").status_code, 204)
+            self.assertEqual(client.post("/auth/logout").status_code, 204)
+            self.assertEqual(client.get("/chats").status_code, 401)
 
 
 if __name__ == "__main__":

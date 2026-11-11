@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useAuth } from '../auth/useAuth'
+import { apiRequest } from '../lib/api'
 
 function ArrowIcon() {
   return (
@@ -27,9 +29,33 @@ function Brand({ footer = false, onClick }) {
 
 function SiteLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
+  const [loggingOut, setLoggingOut] = useState(false)
+  const { user, setUser } = useAuth()
+  const navigate = useNavigate()
 
   function closeMenu() {
     setMenuOpen(false)
+  }
+
+  async function handleLogout() {
+    setLogoutError('')
+    setLoggingOut(true)
+    try {
+      await apiRequest('/auth/logout', { method: 'POST' })
+      setUser(null)
+      closeMenu()
+      navigate('/', { replace: true })
+    } catch (error) {
+      if (error instanceof Error && error.status === 401) {
+        setUser(null)
+        navigate('/', { replace: true })
+      } else {
+        setLogoutError(error instanceof Error ? error.message : 'Unable to sign out. Please try again.')
+      }
+    } finally {
+      setLoggingOut(false)
+    }
   }
 
   return (
@@ -56,6 +82,28 @@ function SiteLayout() {
             Ask Student Friendly Assistant <ArrowIcon />
           </Link>
         </nav>
+        {user && (
+          <div className="site-account">
+            <span className="site-account-avatar" aria-hidden="true">
+              {user.name?.trim().charAt(0).toUpperCase() || 'S'}
+            </span>
+            <span className="site-account-details">
+              <strong>{user.name}</strong>
+              <small>{user.email}</small>
+            </span>
+            <button
+              aria-label="Sign out"
+              className="site-account-logout"
+              disabled={loggingOut}
+              onClick={handleLogout}
+              title={logoutError || 'Sign out'}
+              type="button"
+            >
+              <span aria-hidden="true">↪</span>
+              <span>Sign out</span>
+            </button>
+          </div>
+        )}
       </header>
 
       <main id="home"><Outlet /></main>

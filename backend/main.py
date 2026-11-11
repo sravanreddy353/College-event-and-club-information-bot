@@ -1,22 +1,27 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import html
 import ipaddress
 import json
 import logging
 import os
 import re
+import secrets
 import socket
+import sqlite3
 import urllib.error
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Iterator, Literal
+from uuid import uuid4
 
 if os.getenv("VERCEL"):
     chromadb = None
@@ -37,7 +42,7 @@ else:
         )
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Cookie, Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from google.genai import types
@@ -46,8 +51,20 @@ from pypdf import PdfReader
 
 BACKEND_DIR = Path(__file__).resolve().parent
 BASE_DIR = BACKEND_DIR.parent
+load_dotenv(BACKEND_DIR / ".env")
 DOCUMENTS_DIR = BACKEND_DIR / "documents"
 CHROMA_DIR = BACKEND_DIR / ".chromadb"
+DEFAULT_DATABASE_PATH = (
+    Path("/tmp/student_assistant.sqlite3")
+    if os.getenv("VERCEL")
+    else BACKEND_DIR / "student_assistant.sqlite3"
+)
+DATABASE_PATH = Path(
+    os.getenv("DATABASE_PATH") or str(DEFAULT_DATABASE_PATH)
+)
+SESSION_COOKIE_NAME = "student_session"
+SESSION_DURATION = timedelta(days=30)
+PASSWORD_HASH_ITERATIONS = 310_000
 UNAVAILABLE_ANSWER = (
     "I couldn't verify this from the available college records or current web search results. "
     "Please check the official KARE website for the latest information."
@@ -92,8 +109,6 @@ TOPIC_TERMS = {
 logger = logging.getLogger("student_friendly_bot")
 logger.setLevel(logging.INFO)
 
-load_dotenv(BACKEND_DIR / ".env")
-
 chroma_client: Any | None = None
 knowledge_collection: Any | None = None
 gemini_client: genai.Client | None = None
@@ -107,6 +122,7 @@ class ConversationTurn(BaseModel):
 class ChatRequest(BaseModel):
     message: Annotated[str, Field(min_length=1, max_length=2000)]
     history: list[ConversationTurn] = Field(default_factory=list, max_length=12)
+    chat_id: str | None = Field(default=None, max_length=64)
 
 
 class SourceReference(BaseModel):
@@ -120,6 +136,167 @@ class SourceReference(BaseModel):
 class ChatResponse(BaseModel):
     answer: str
     sources: list[SourceReference]
+    chat_id: str | None = None
+
+
+class RegisterRequest(BaseModel):
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+    password: Annotated[str, Field(min_length=8, max_length=128)]
+
+
+class LoginRequest(BaseModel):
+    email: Annotated[str, Field(min_length=3, max_length=254)]
+    password: Annotated[str, Field(min_length=1, max_length=128)]
+
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+
+
+@contextmanager
+def database_connection() -> Iterator[sqlite3.Connection]:
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(DATABASE_PATH, timeout=10)
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield connection
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.close()
+
+
+def initialize_database() -> None:
+    with database_connection() as connection:
+        connection.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS sessions (
+                token_hash TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS chats (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS chats_user_updated
+                ON chats(user_id, updated_at DESC);
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                content TEXT NOT NULL,
+                sender TEXT NOT NULL CHECK(sender IN ('user', 'assistant')),
+                sources_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS messages_chat_created
+                ON messages(chat_id, created_at, id);
+            """
+        )
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def timestamp(value: datetime | None = None) -> str:
+    return (value or utc_now()).isoformat(timespec="seconds")
+
+
+def normalize_email(email: str) -> str:
+    normalized = email.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+        raise HTTPException(status_code=422, detail="Enter a valid email address.")
+    return normalized
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, PASSWORD_HASH_ITERATIONS
+    )
+    return f"pbkdf2_sha256${PASSWORD_HASH_ITERATIONS}${salt.hex()}${digest.hex()}"
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    try:
+        algorithm, iterations, salt_hex, digest_hex = stored_hash.split("$")
+        if algorithm != "pbkdf2_sha256":
+            return False
+        expected_digest = bytes.fromhex(digest_hex)
+        actual_digest = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(salt_hex), int(iterations)
+        )
+    except (ValueError, TypeError):
+        return False
+    return hmac.compare_digest(actual_digest, expected_digest)
+
+
+def session_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def create_session(user_id: str, response: Response) -> None:
+    token = secrets.token_urlsafe(32)
+    now = utc_now()
+    with database_connection() as connection:
+        connection.execute(
+            "INSERT INTO sessions(token_hash, user_id, created_at, expires_at) "
+            "VALUES (?, ?, ?, ?)",
+            (
+                session_token_hash(token),
+                user_id,
+                timestamp(now),
+                timestamp(now + SESSION_DURATION),
+            ),
+        )
+    response.set_cookie(
+        SESSION_COOKIE_NAME,
+        token,
+        max_age=int(SESSION_DURATION.total_seconds()),
+        httponly=True,
+        secure=os.getenv("COOKIE_SECURE", "").lower() == "true"
+        or bool(os.getenv("VERCEL")),
+        samesite="lax",
+        path="/",
+    )
+
+
+def require_user(
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> dict[str, str]:
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Please sign in to continue.")
+    with database_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT users.id, users.name, users.email
+            FROM sessions JOIN users ON users.id = sessions.user_id
+            WHERE sessions.token_hash = ? AND sessions.expires_at > ?
+            """,
+            (session_token_hash(session_token), timestamp()),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=401, detail="Your session has expired. Please sign in.")
+    return dict(row)
 
 
 class IngestResponse(BaseModel):
@@ -919,6 +1096,7 @@ def sync_knowledge_base() -> IngestResponse:
 async def lifespan(_: FastAPI):
     global chroma_client, knowledge_collection, gemini_client
 
+    initialize_database()
     DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
     if chromadb is not None and DefaultEmbeddingFunction is not None:
         try:
@@ -961,14 +1139,137 @@ allowed_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type"],
 )
 
 
+@app.post("/auth/register", response_model=UserResponse, status_code=201)
+def register(request: RegisterRequest, response: Response) -> UserResponse:
+    email = normalize_email(request.email)
+    name = request.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Enter your name.")
+
+    user = UserResponse(id=str(uuid4()), name=name, email=email)
+    try:
+        with database_connection() as connection:
+            connection.execute(
+                "INSERT INTO users(id, name, email, password_hash, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    user.id,
+                    user.name,
+                    user.email,
+                    hash_password(request.password),
+                    timestamp(),
+                ),
+            )
+    except sqlite3.IntegrityError as error:
+        raise HTTPException(
+            status_code=409, detail="An account with this email already exists."
+        ) from error
+
+    create_session(user.id, response)
+    return user
+
+
+@app.post("/auth/login", response_model=UserResponse)
+def login(request: LoginRequest, response: Response) -> UserResponse:
+    email = normalize_email(request.email)
+    with database_connection() as connection:
+        row = connection.execute(
+            "SELECT id, name, email, password_hash FROM users WHERE email = ?",
+            (email,),
+        ).fetchone()
+    if row is None or not verify_password(request.password, row["password_hash"]):
+        raise HTTPException(status_code=401, detail="Email or password is incorrect.")
+
+    create_session(row["id"], response)
+    return UserResponse(id=row["id"], name=row["name"], email=row["email"])
+
+
+@app.post("/auth/logout", status_code=204)
+def logout(
+    response: Response,
+    session_token: str | None = Cookie(default=None, alias=SESSION_COOKIE_NAME),
+) -> Response:
+    if session_token:
+        with database_connection() as connection:
+            connection.execute(
+                "DELETE FROM sessions WHERE token_hash = ?",
+                (session_token_hash(session_token),),
+            )
+    response.delete_cookie(SESSION_COOKIE_NAME, path="/", httponly=True, samesite="lax")
+    response.status_code = 204
+    return response
+
+
+@app.get("/auth/me", response_model=UserResponse)
+def current_user(user: dict[str, str] = Depends(require_user)) -> UserResponse:
+    return UserResponse(**user)
+
+
+@app.get("/chats")
+def list_chats(user: dict[str, str] = Depends(require_user)) -> list[dict[str, str]]:
+    with database_connection() as connection:
+        rows = connection.execute(
+            "SELECT id, title, created_at, updated_at FROM chats "
+            "WHERE user_id = ? ORDER BY updated_at DESC",
+            (user["id"],),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+@app.get("/chats/{chat_id}")
+def get_chat(
+    chat_id: str, user: dict[str, str] = Depends(require_user)
+) -> dict[str, Any]:
+    with database_connection() as connection:
+        chat_row = connection.execute(
+            "SELECT id, title, created_at, updated_at FROM chats "
+            "WHERE id = ? AND user_id = ?",
+            (chat_id, user["id"]),
+        ).fetchone()
+        if chat_row is None:
+            raise HTTPException(status_code=404, detail="Conversation not found.")
+        message_rows = connection.execute(
+            "SELECT id, content, sender, sources_json, created_at FROM messages "
+            "WHERE chat_id = ? AND user_id = ? ORDER BY created_at, id",
+            (chat_id, user["id"]),
+        ).fetchall()
+    return {
+        **dict(chat_row),
+        "messages": [
+            {
+                "id": str(row["id"]),
+                "content": row["content"],
+                "role": row["sender"],
+                "sources": json.loads(row["sources_json"]),
+                "timestamp": row["created_at"],
+            }
+            for row in message_rows
+        ],
+    }
+
+
+@app.delete("/chats/{chat_id}", status_code=204)
+def delete_chat(
+    chat_id: str, user: dict[str, str] = Depends(require_user)
+) -> Response:
+    with database_connection() as connection:
+        cursor = connection.execute(
+            "DELETE FROM chats WHERE id = ? AND user_id = ?",
+            (chat_id, user["id"]),
+        )
+    if cursor.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+    return Response(status_code=204)
+
+
 @app.post("/ingest", response_model=IngestResponse)
-def ingest_documents() -> IngestResponse:
+def ingest_documents(_: dict[str, str] = Depends(require_user)) -> IngestResponse:
     try:
         return sync_knowledge_base()
     except Exception as error:
@@ -1167,7 +1468,6 @@ def health() -> dict[str, str | int | bool]:
     }
 
 
-@app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
     message = request.message.strip()
     if not message:
@@ -1210,3 +1510,71 @@ def chat(request: ChatRequest) -> ChatResponse:
             )
 
     return ChatResponse(answer=answer, sources=build_sources(context, web_results))
+
+
+@app.post("/chat", response_model=ChatResponse)
+def authenticated_chat(
+    request: ChatRequest, user: dict[str, str] = Depends(require_user)
+) -> ChatResponse:
+    message = request.message.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="Please enter a question.")
+
+    chat_id = request.chat_id
+    now = timestamp()
+    with database_connection() as connection:
+        if chat_id:
+            chat_row = connection.execute(
+                "SELECT id FROM chats WHERE id = ? AND user_id = ?",
+                (chat_id, user["id"]),
+            ).fetchone()
+            if chat_row is None:
+                raise HTTPException(status_code=404, detail="Conversation not found.")
+        else:
+            chat_id = str(uuid4())
+            title = message[:77].rstrip()
+            if len(message) > 77:
+                title += "..."
+            connection.execute(
+                "INSERT INTO chats(id, user_id, title, created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (chat_id, user["id"], title, now, now),
+            )
+
+        history_rows = connection.execute(
+            "SELECT sender, content FROM messages WHERE chat_id = ? AND user_id = ? "
+            "ORDER BY created_at DESC, id DESC LIMIT 8",
+            (chat_id, user["id"]),
+        ).fetchall()
+        history = [
+            ConversationTurn(role=row["sender"], content=row["content"])
+            for row in reversed(history_rows)
+        ]
+        connection.execute(
+            "INSERT INTO messages(chat_id, user_id, content, sender, created_at) "
+            "VALUES (?, ?, ?, 'user', ?)",
+            (chat_id, user["id"], message, now),
+        )
+        connection.execute(
+            "UPDATE chats SET updated_at = ? WHERE id = ? AND user_id = ?",
+            (now, chat_id, user["id"]),
+        )
+
+    answer = chat(ChatRequest(message=message, history=history))
+    with database_connection() as connection:
+        connection.execute(
+            "INSERT INTO messages(chat_id, user_id, content, sender, sources_json, created_at) "
+            "VALUES (?, ?, ?, 'assistant', ?, ?)",
+            (
+                chat_id,
+                user["id"],
+                answer.answer,
+                json.dumps([source.model_dump() for source in answer.sources]),
+                timestamp(),
+            ),
+        )
+        connection.execute(
+            "UPDATE chats SET updated_at = ? WHERE id = ? AND user_id = ?",
+            (timestamp(), chat_id, user["id"]),
+        )
+    return ChatResponse(answer=answer.answer, sources=answer.sources, chat_id=chat_id)

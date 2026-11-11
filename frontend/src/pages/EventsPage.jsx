@@ -15,8 +15,8 @@ function EventsPage() {
       <div className="page-intro">
         <div className="eyebrow section-eyebrow">MAKE A LITTLE ROOM FOR FUN</div>
         <h1>Events on campus<span>.</span></h1>
-        <p>Find a reason to step out, meet someone new, or try something different.</p>
-        <span className="sample-label">ILLUSTRATIVE EXAMPLES — NOT OFFICIAL COLLEGE EVENTS</span>
+        <p>Browse activities documented on KARE&apos;s official website. These are historical events, not upcoming announcements.</p>
+        <span className="sample-label">OFFICIAL KARE RECORDS · HISTORICAL EVENTS</span>
       </div>
 
       <div className="event-list">
@@ -28,11 +28,13 @@ function EventsPage() {
               <h2>{event.title}</h2>
               <p>{event.description}</p>
               <div className="event-detail-meta">
-                <span>{event.time}</span>
-                <span><PinIcon />{event.location}</span>
+                <span>{event.time || 'Time not listed'}</span>
+                {event.location && <span><PinIcon />{event.location}</span>}
+                {event.organizer && <span>Organized by {event.organizer}</span>}
               </div>
               <div className="registration-note">
-                Registration details are not available in this sample. Check your college&apos;s official event listing.
+                Historical event. Future dates and registration are not confirmed.{' '}
+                <a href={event.sourceUrl} rel="noreferrer noopener" target="_blank">View official KARE source</a>
               </div>
             </div>
           </article>

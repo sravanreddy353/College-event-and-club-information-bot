@@ -1,7 +1,5 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { clubs, events } from '../data/campusData'
-import ChatAssistant from '../components/ChatAssistant'
 
 function ArrowIcon() {
   return (
@@ -28,8 +26,8 @@ function EventCard({ event }) {
         <span className="event-category">{event.category}</span>
       </div>
       <h3>{event.title}</h3>
-      <p className="event-time">{event.time}</p>
-      <div className="event-location"><PinIcon />{event.location}</div>
+      <p className="event-time">{event.time || 'Historical event'}</p>
+      {event.location && <div className="event-location"><PinIcon />{event.location}</div>}
     </article>
   )
 }
@@ -49,8 +47,6 @@ function ClubCard({ club }) {
 }
 
 function HomePage() {
-  const [chatOpen, setChatOpen] = useState(false)
-
   return (
     <>
       <section className="hero-section">
@@ -104,10 +100,10 @@ function HomePage() {
         <div className="section-heading">
           <div>
             <div className="eyebrow section-eyebrow">SAVE YOURSELF A SEAT</div>
-            <h2>Coming up on campus<span>.</span></h2>
-            <p>Little plans have a way of becoming big memories.</p>
+            <h2>Past events at KARE<span>.</span></h2>
+            <p>A few activities documented on the university&apos;s official website.</p>
           </div>
-          <span className="sample-label">ILLUSTRATIVE EXAMPLES</span>
+          <span className="sample-label">HISTORICAL · NOT UPCOMING</span>
         </div>
         <div className="event-grid">{events.map((event) => <EventCard event={event} key={event.title} />)}</div>
         <Link className="section-more-link" to="/events">See all events <ArrowIcon /></Link>
@@ -135,17 +131,14 @@ function HomePage() {
         </div>
         <div className="assistant-cta">
           <span>Here when you need it</span>
-          <button
+          <Link
             className="button button-light"
-            type="button"
-            onClick={() => setChatOpen(true)}
+            to="/assistant"
           >
             Chat with Student Friendly Bot <ArrowIcon />
-          </button>
+          </Link>
         </div>
       </section>
-
-      {chatOpen && <ChatAssistant onClose={() => setChatOpen(false)} />}
 
       <section className="about-note" id="about">
         <span>BUILT FOR THE IN-BETWEEN MOMENTS</span>

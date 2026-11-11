@@ -4,8 +4,11 @@ Institution: Kalasalingam Academy of Research and Education (KARE)
 Location: Anand Nagar, Krishnankoil, Tamil Nadu – 626126
 Last checked: 10 November 2026
 
-DATA SOURCE:
-Official university website:
+OFFICIAL SOURCE LINKS:
+University homepage:
+https://www.kalasalingam.ac.in/
+
+University clubs and student activities:
 https://www.kalasalingam.ac.in/clubs/
 
 IMPORTANT:
